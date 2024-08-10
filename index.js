@@ -55,8 +55,8 @@ bot.onText(/\/fakeNotification(?: (.+))?/, (msg, match) => {
     const imageUrl = imageUrlMap[productName];
     const description = `جرب الطعم الحقيقي لأصالة البيت العربي و الضيافة و التراث مع مزيج سعودي مميز للقهوة السعودية و الهيل`;
     const message = `
+    *تنبيه وهمي تنبيه وهمي تنبيه وهمي تنبيه وهمي تنبيه وهمي *
 *اسم المنتج:* [${productName}](https://www.dzrt.com/ar/haila.html) \n
-*الوصف:* ${description} \n 
 *الحالة:* *متوفر* \n
 `;
 
