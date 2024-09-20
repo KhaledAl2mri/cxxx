@@ -2,11 +2,12 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const TelegramBot = require('node-telegram-bot-api');
 
+// Telegram Bot Token
 const website = 'https://www.dzrt.com/ar-sa/category/nicotine-pouches';
 const token = '7278217456:AAF4feWt6W7RStgYkeMmfl9-m-AzUmWT3XU';
-
 const bot = new TelegramBot(token, { polling: true });
 
+// Channel mapping for products
 const channelThreadMap = {
   'ايسي رش': '-1002179587442_4',
   'سي سايد فروست': '-1002179587442_5',
@@ -21,8 +22,10 @@ const channelThreadMap = {
   'تمرة': '-1002179587442_6'
 };
 
+// Keep track of sent products
 const sentProducts = new Map();
 
+// Function to send notifications
 async function sendNotifications() {
   try {
     const response = await axios.get(website);
@@ -31,23 +34,29 @@ async function sendNotifications() {
     // Select the product containers
     const products = $('.grid.grid-cols-2.gap-3.lg\\:grid-cols-5.lg\\:gap-6 > div.relative.bg-white');
 
+    // Iterate over each product
     products.each(async (i, product) => {
-      // Select the correct span for the product name using a dynamic approach
-      const name = $(product).find('a > div.flex.flex-col.pb-2\\.5.pt-4\\.5 > span:nth-child(1)').text().trim();
+      // Get product name
+      let name = $(product).find('a > div.flex.flex-col.pb-2\\.5.pt-4\\.5 > span:nth-child(1)').text().trim();
 
+      // Handle special product name case
       if (name === 'Samra Special Edition') {
         name = 'سمرة';
       }
 
+      // Escape special characters for Telegram Markdown
+      const escapedName = name.replace(/\./g, '\\.');
+
+      // Check product availability
       const availabilitySpan = $(product).find('.bg-custom-orange-700');
-      const isAvailable = availabilitySpan.length === 0 && !$(product).find('button[disabled]').length; // Check for availability
+      const isAvailable = availabilitySpan.length === 0 && !$(product).find('button[disabled]').length;
       const link = $(product).find('a').attr('href');
       const description = $(product).find('span.line-clamp-2').text().trim();
 
+      // Proceed if the product is available and hasn't been notified yet
       if (isAvailable && (!sentProducts.has(name) || sentProducts.get(name) !== 'متوفر')) {
         const message = `
-*اسم المنتج:* [${name}](https://www.dzrt.com${link}) \n
-*الوصف:* ${description} \n
+*اسم المنتج:* [${escapedName}](https://www.dzrt.com${link}) \n
 *الحالة:* *متوفر* \n
         `;
 
@@ -86,8 +95,7 @@ async function sendNotifications() {
   }
 }
 
-
-
+// Command to check product availability via Telegram bot
 bot.onText(/\/wc (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const productName = match[1].trim();
@@ -97,54 +105,50 @@ bot.onText(/\/wc (.+)/, async (msg, match) => {
     const $ = cheerio.load(response.data);
     const products = $('.grid.grid-cols-2.gap-3.lg\\:grid-cols-5.lg\\:gap-6 > div.relative.bg-white');
 
-
     let productFound = false;
     let isAvailable = false;
 
+    // Check each product
     products.each((i, product) => {
-      const name = $(product).find('span[title]').first().text().trim(); // Get product name
-      const addToCartButton = $(product).find('button[disabled]'); // Find the "Add to Cart" button with disabled attribute
+      let name = $(product).find('span[title]').first().text().trim(); // Get product name
+      const addToCartButton = $(product).find('button[disabled]'); // Find "Add to Cart" button
 
+      // Handle special case for "Samra Special Edition"
       if (name === 'Samra Special Edition') {
         name = 'سمرة';
       }
-      
-      console.log(`Product Name: ${name}`); // Log the product name to the console
 
-      // Check availability based on the button's disabled state
+      // Check if the product is available
       const buttonDisabled = addToCartButton.attr('disabled');
-      isAvailable = buttonDisabled === undefined; // If button is not disabled, the product is available
-      
-      console.log(`Button Disabled: ${buttonDisabled}`); // Log the button's disabled state
-      console.log(`Available: ${isAvailable}`); // Log the availability status
+      isAvailable = buttonDisabled === undefined;
 
       if (name === productName) {
         productFound = true;
-        // Check availability again to ensure it matches
-        isAvailable = buttonDisabled === undefined; // Update availability status if product is found
       }
     });
 
+    // Send product availability message
     if (productFound) {
       const message = isAvailable 
         ? `المنتج *${productName}* متوفر الآن` 
         : `المنتج *${productName}* غير متوفر`;
       await bot.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
     } else {
-      await bot.sendMessage(chatId, 'عذراً، المنتج المطلوب غير موجود.');
+      await bot.sendMessage(chatId, 'عذراً، المنتج المطلوب غير موجود');
     }
   } catch (error) {
     console.error('خطأ في جلب البيانات:', error);
-    await bot.sendMessage(chatId, 'حدث خطأ أثناء محاولة جلب البيانات.');
+    await bot.sendMessage(chatId, 'حدث خطأ أثناء محاولة جلب البيانات');
   }
 });
 
+// Send notifications initially
 sendNotifications();
 
+// Handle polling and bot errors
 bot.on('polling_error', (error) => {
   console.error(`خطأ في الاستطلاع: ${error.message}`);
 });
-
 bot.on('error', (error) => {
   console.error(`خطأ في البوت: ${error.message}`);
 });
