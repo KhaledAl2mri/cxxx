@@ -7,7 +7,6 @@ const token = '7278217456:AAF4feWt6W7RStgYkeMmfl9-m-AzUmWT3XU';
 
 const bot = new TelegramBot(token, { polling: true });
 
-
 const channelThreadMap = {
   'ايسي رش': '-1002179587442_4',
   'سي سايد فروست': '-1002179587442_5',
@@ -22,27 +21,28 @@ const channelThreadMap = {
   'تمرة': '-1002179587442_6'
 };
 
-
 const sentProducts = new Map();
-
 
 async function sendNotifications() {
   try {
     const response = await axios.get(website);
     const $ = cheerio.load(response.data);
 
-    // Select the correct product containers
+    // Select the product containers
     const products = $('.grid.grid-cols-2.gap-3.lg\\:grid-cols-5.lg\\:gap-6 > div.relative.bg-white');
 
     products.each(async (i, product) => {
-      const name = $(product).find('span[title]').text().trim();
+      // Select the correct span for the product name using a dynamic approach
+      const name = $(product).find('a > div.flex.flex-col.pb-2\\.5.pt-4\\.5 > span:nth-child(1)').text().trim();
+
+      if (name === 'Samra Special Edition') {
+        name = 'سمرة';
+      }
+
       const availabilitySpan = $(product).find('.bg-custom-orange-700');
       const isAvailable = availabilitySpan.length === 0 && !$(product).find('button[disabled]').length; // Check for availability
       const link = $(product).find('a').attr('href');
       const description = $(product).find('span.line-clamp-2').text().trim();
-
-      // Print product availability to console for debugging
-      console.log(`اسم المنتج: ${name}, متوفر: ${isAvailable}`);
 
       if (isAvailable && (!sentProducts.has(name) || sentProducts.get(name) !== 'متوفر')) {
         const message = `
@@ -50,7 +50,7 @@ async function sendNotifications() {
 *الوصف:* ${description} \n
 *الحالة:* *متوفر* \n
         `;
-        
+
         const opts = {
           parse_mode: 'MarkdownV2',
           reply_markup: JSON.stringify({
@@ -82,9 +82,10 @@ async function sendNotifications() {
   } catch (error) {
     console.error('خطأ في جلب البيانات:', error);
   } finally {
-    setTimeout(sendNotifications, 2800);
+    setTimeout(sendNotifications, 2800); // Re-run the function after 2.8 seconds
   }
 }
+
 
 
 bot.onText(/\/wc (.+)/, async (msg, match) => {
@@ -96,6 +97,7 @@ bot.onText(/\/wc (.+)/, async (msg, match) => {
     const $ = cheerio.load(response.data);
     const products = $('.grid.grid-cols-2.gap-3.lg\\:grid-cols-5.lg\\:gap-6 > div.relative.bg-white');
 
+
     let productFound = false;
     let isAvailable = false;
 
@@ -103,6 +105,10 @@ bot.onText(/\/wc (.+)/, async (msg, match) => {
       const name = $(product).find('span[title]').first().text().trim(); // Get product name
       const addToCartButton = $(product).find('button[disabled]'); // Find the "Add to Cart" button with disabled attribute
 
+      if (name === 'Samra Special Edition') {
+        name = 'سمرة';
+      }
+      
       console.log(`Product Name: ${name}`); // Log the product name to the console
 
       // Check availability based on the button's disabled state
