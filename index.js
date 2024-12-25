@@ -1,35 +1,129 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const TelegramBot = require('node-telegram-bot-api');
+const fs = require('fs');
+const path = require('path');
+let { channelThreadMap } = require('./channelConfig');
 
 // Telegram Bot Token
 const website = 'https://www.dzrt.com/ar-sa/category/nicotine-pouches';
 const token = '7278217456:AAF4feWt6W7RStgYkeMmfl9-m-AzUmWT3XU';
 const bot = new TelegramBot(token, { polling: true });
 
-// Channel mapping for products
-const channelThreadMap = {
-  'ايسي رش': '-1002179587442_4',
-  'سي سايد فروست': '-1002179587442_5',
-  'هيلة': '-1002179587442_14',
-  'سبايسي زيست': '-1002179587442_13',
-  'إيدجي منت': '-1002179587442_12',
-  'جاردن منت': '-1002179587442_11',
-  'هايلاند بيريز': '-1002179587442_10',
-  'منت فيوجن': '-1002179587442_9',
-  'سمرة': '-1002179587442_8',
-  'بيربل مست': '-1002179587442_7',
-  'تمرة': '-1002179587442_6',
-  'موهيتو': '-1002179587442_53695',
-  'حامض': '-1002179587442_53696',
-  'عنقود': '-1002179587442_53697',
-  'منقا': '-1002179587442_53698',
-  'بنّة': '-1002179587442_53699'
-};
-
-
 // Keep track of sent products
 const sentProducts = new Map();
+
+// Store user states
+const userStates = new Map();
+
+bot.onText(/\/addtopic/, async (msg) => {
+  try {
+    const chatId = msg.chat.id;
+    
+    // Only process command if it's in a specific chat
+    if (chatId !== 893875350) {  // Replace with your bot admin chat ID
+      await bot.sendMessage(chatId, 'عذراً، هذا الأمر متاح فقط في غرفة الإدارة ❌');
+      return;
+    }
+
+    // Set user state to waiting for room name
+    userStates.set(msg.from.id, 'waiting_for_room_name');
+    
+    // Ask for room name with cancel button
+    await bot.sendMessage(chatId, 'الرجاء إدخال اسم الغرفة: \n ** انتباه : يجب عليك كتابة الاسم بالطريقة الصحيحة بدون اي مسافات ابدا وبنفس الصيغة يفضل نسخ الاسم **', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: 'إلغاء ❌', callback_data: 'cancel_addtopic' }]
+        ]
+      }
+    });
+  } catch (error) {
+    console.error('خطأ في إضافة الموضوع:', error);
+    await bot.sendMessage(msg.chat.id, 'حدث خطأ أثناء إضافة الموضوع، يرجى المحاولة مرة أخرى ❌');
+  }
+});
+
+
+// Handle cancel button callback
+bot.on('callback_query', async (callbackQuery) => {
+  const userId = callbackQuery.from.id;
+  const chatId = callbackQuery.message.chat.id;
+  const messageId = callbackQuery.message.message_id;
+
+  if (callbackQuery.data === 'cancel_addtopic') {
+    // Clear user state
+    userStates.delete(userId);
+    
+    // Edit the original message to show cancellation
+    await bot.editMessageText('تم إلغاء إضافة الغرفة ❌', {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { inline_keyboard: [] }
+    });
+    
+    // Answer the callback query
+    await bot.answerCallbackQuery(callbackQuery.id);
+  }
+});
+
+// Handle user messages for room creation
+bot.on('message', async (msg) => {
+  if (!msg.text || msg.text.startsWith('/')) return;
+
+  const userId = msg.from.id;
+  const chatId = msg.chat.id;
+  const state = userStates.get(userId);
+
+  // Only process messages if they're in the admin chat
+  if (chatId !== 893875350) return;  // Replace with your bot admin chat ID
+
+  if (state === 'waiting_for_room_name') {
+    const roomName = msg.text.trim();
+
+    // Validate room name
+    if (roomName.length < 2 || roomName.length > 30) {
+      await bot.sendMessage(chatId, 'عذراً، يجب أن يكون اسم الغرفة بين 2 و 30 حرف ❌');
+      userStates.delete(userId);
+      return;
+    }
+
+    // Check if room name already exists
+    if (channelThreadMap[roomName]) {
+      await bot.sendMessage(chatId, 'عذراً، هذا الاسم موجود مسبقاً ❌');
+      userStates.delete(userId);
+      return;
+    }
+
+    try {
+      // Create a new topic in the channel
+      const topic = await bot.createForumTopic(chatId, roomName);
+      
+      // Add new topic to channelThreadMap
+      channelThreadMap[roomName] = `${chatId}_${topic.message_thread_id}`;
+
+      // Update the configuration file
+      const configPath = path.join(__dirname, 'channelConfig.js');
+      const configContent = `// channelConfig.js\n\nconst channelThreadMap = ${JSON.stringify(channelThreadMap, null, 2)};\n\nmodule.exports = {\n  channelThreadMap\n};`;
+      
+      fs.writeFileSync(configPath, configContent, 'utf8');
+
+      // Send success message
+      const successMessage = `تم إنشاء الغرفة بنجاح ✅\n\nاسم الغرفة: ${roomName}\nمعرف الغرفة: ${topic.message_thread_id}`;
+      await bot.sendMessage(chatId, successMessage);
+
+      // Log the updated channelThreadMap
+      console.log('تم تحديث قائمة الغرف:', channelThreadMap);
+    } catch (error) {
+      console.error('خطأ في إنشاء الغرفة:', error);
+      await bot.sendMessage(chatId, 'حدث خطأ أثناء إنشاء الغرفة، يرجى المحاولة مرة أخرى ❌');
+    }
+
+    // Clear user state
+    userStates.delete(userId);
+  }
+});
+
+// Keep track of sent products
 
 // Function to send notifications
 async function sendNotifications() {
