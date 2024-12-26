@@ -21,94 +21,72 @@ const ADMIN_CHAT_ID = 893875350;
 
 // ... previous imports and setup code remains the same ...
 
-// Create topic using raw API call
 async function createForumTopic(chatId, name) {
     try {
-      const response = await axios.post(`https://api.telegram.org/bot${token}/createForumTopic`, {
-        chat_id: chatId,
-        name: name,
-        icon_color: 7322096  // Default blue color for the topic
-      });
-      
-      if (response.data.ok) {
-        return response.data.result;
-      } else {
-        throw new Error(response.data.description);
-      }
+        const response = await axios.post(`https://api.telegram.org/bot${token}/createForumTopic`, {
+            chat_id: chatId,
+            name: name,
+            icon_color: 7322096  // Default blue color for the topic
+        });
+
+        if (response.data.ok) {
+            return response.data.result;
+        } else {
+            throw new Error(response.data.description);
+        }
     } catch (error) {
-      // Log the full error response for debugging
-      console.error('Full error response:', error.response?.data);
-      throw new Error(`Failed to create forum topic: ${error.response?.data?.description || error.message}`);
+        console.error('Full error response:', error.response?.data);
+        throw new Error(`Failed to create forum topic: ${error.response?.data?.description || error.message}`);
     }
-  }
-  
-  // Modified message handler to provide better error information
-  bot.on('message', async (msg) => {
+}
+
+// Message handler
+bot.on('message', async (msg) => {
     if (!msg.text || msg.text.startsWith('/')) return;
-  
+
     const userId = msg.from.id;
     const chatId = msg.chat.id;
     const state = userStates.get(userId);
-  
+
     if (chatId !== ADMIN_CHAT_ID) return;
-  
+
     if (state === 'waiting_for_room_name') {
-      const roomName = msg.text.trim();
-  
-      try {
-        // Validate room name
-        if (roomName.length < 2 || roomName.length > 30) {
-          await bot.sendMessage(chatId, 'عذراً، يجب أن يكون اسم الغرفة بين 2 و 30 حرف ❌');
-          return;
+        const roomName = msg.text.trim();
+
+        try {
+            if (roomName.length < 2 || roomName.length > 30) {
+                await bot.sendMessage(chatId, 'اسم الغرفة يجب أن يكون بين 2 و 30 حرف ❌');
+                return;
+            }
+
+            if (channelThreadMap[roomName]) {
+                await bot.sendMessage(chatId, 'هذا الاسم موجود مسبقاً ❌');
+                return;
+            }
+
+            const chatInfo = await bot.getChat(chatId);
+            if (!chatInfo.is_forum) {
+                await bot.sendMessage(chatId, 'يجب أن تكون المجموعة منتدى لإنشاء المواضيع ❌');
+                return;
+            }
+
+            const topic = await createForumTopic(chatInfo.id, roomName);
+            channelThreadMap[roomName] = `${chatInfo.id}_${topic.message_thread_id}`;
+
+            const successMessage = `تم إنشاء الغرفة بنجاح ✅\n\nاسم الغرفة: ${roomName}\nالمعرف: ${topic.message_thread_id}`;
+            await bot.sendMessage(chatId, successMessage);
+        } catch (error) {
+            console.error('خطأ في إنشاء الغرفة:', error);
+            const errorMessage = error.message.includes('not a forum') ?
+                'يجب أن تكون المجموعة منتدى لإنشاء المواضيع ❌' :
+                'حدث خطأ أثناء إنشاء الغرفة، يرجى المحاولة مرة أخرى ❌';
+
+            await bot.sendMessage(chatId, errorMessage);
         }
-  
-        // Check if room name already exists
-        if (channelThreadMap[roomName]) {
-          await bot.sendMessage(chatId, 'عذراً، هذا الاسم موجود مسبقاً ❌');
-          return;
-        }
-  
-        console.log('Creating topic with name:', roomName);
-        
-        // Make sure we're using the supergroup ID
-        const chatInfo = await bot.getChat(chatId);
-        if (!chatInfo.is_forum) {
-          await bot.sendMessage(chatId, 'عذراً، يجب أن تكون المجموعة منتدى لإنشاء المواضيع ❌');
-          return;
-        }
-  
-        // Create topic using our custom function
-        const topic = await createForumTopic(chatInfo.id, roomName);
-        
-        // Add new topic to channelThreadMap
-        channelThreadMap[roomName] = `${chatInfo.id}_${topic.message_thread_id}`;
-  
-        // Update the configuration file
-        updateConfigFile();
-  
-        // Send success message
-        const successMessage = `تم إنشاء الغرفة بنجاح ✅\n\nاسم الغرفة: ${roomName}\nالمعرف: ${topic.message_thread_id}`;
-        await bot.sendMessage(chatId, successMessage);
-  
-        console.log('تم تحديث قائمة الغرف:', channelThreadMap);
-      } catch (error) {
-        console.error('خطأ في إنشاء الغرفة:', error);
-        let errorMessage = 'حدث خطأ أثناء إنشاء الغرفة، يرجى المحاولة مرة أخرى ❌';
-        
-        // Add more specific error messages
-        if (error.message.includes('not a forum')) {
-          errorMessage = 'عذراً، المجموعة يجب أن تكون منتدى لإنشاء المواضيع ❌';
-        } else if (error.message.includes('chat not found')) {
-          errorMessage = 'عذراً، لم يتم العثور على المجموعة ❌';
-        }
-        
-        await bot.sendMessage(chatId, errorMessage);
-      }
-  
-      // Clear user state
-      userStates.delete(userId);
+
+        userStates.delete(userId);
     }
-  });
+});
   
 
 // Delete forum topic using raw API call
