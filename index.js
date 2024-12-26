@@ -19,6 +19,24 @@ const userStates = new Map();
 // Admin chat ID
 const ADMIN_CHAT_ID = 893875350;
 
+// Create topic using raw API call
+async function createForumTopic(chatId, name) {
+  try {
+    const response = await axios.post(`https://api.telegram.org/bot${token}/createForumTopic`, {
+      chat_id: chatId,
+      name: name
+    });
+    
+    if (response.data.ok) {
+      return response.data.result;
+    } else {
+      throw new Error(response.data.description);
+    }
+  } catch (error) {
+    throw new Error(`Failed to create forum topic: ${error.message}`);
+  }
+}
+
 // Utility function to update config file
 const updateConfigFile = () => {
   const configPath = path.join(__dirname, 'channelConfig.js');
@@ -28,158 +46,7 @@ const updateConfigFile = () => {
   fs.writeFileSync(configPath, configContent, 'utf8');
 };
 
-// Command to show topics management menu
-bot.onText(/\/topics/, async (msg) => {
-  try {
-    const chatId = msg.chat.id;
-    
-    if (chatId !== ADMIN_CHAT_ID) {
-      await bot.sendMessage(chatId, 'عذراً، هذا الأمر متاح فقط في غرفة الإدارة ❌');
-      return;
-    }
-
-    await bot.sendMessage(chatId, 'الرجاء اختيار العملية المطلوبة:', {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: 'إضافة غرفة جديدة ➕', callback_data: 'add_topic' }],
-          [{ text: 'حذف غرفة ➖', callback_data: 'show_remove_topics' }],
-          [{ text: 'عرض جميع الغرف 📋', callback_data: 'list_topics' }]
-        ]
-      }
-    });
-  } catch (error) {
-    console.error('خطأ في عرض قائمة إدارة المواضيع:', error);
-    await bot.sendMessage(msg.chat.id, 'حدث خطأ، يرجى المحاولة مرة أخرى ❌');
-  }
-});
-
-// Handle callback queries
-bot.on('callback_query', async (callbackQuery) => {
-  const userId = callbackQuery.from.id;
-  const chatId = callbackQuery.message.chat.id;
-  const messageId = callbackQuery.message.message_id;
-
-  try {
-    switch (callbackQuery.data) {
-      case 'add_topic':
-        userStates.set(userId, 'waiting_for_room_name');
-        await bot.editMessageText(
-          'الرجاء إدخال اسم الغرفة الجديدة:', 
-          {
-            chat_id: chatId,
-            message_id: messageId,
-            reply_markup: {
-              inline_keyboard: [[{ text: 'إلغاء ❌', callback_data: 'cancel_operation' }]]
-            }
-          }
-        );
-        break;
-
-      case 'show_remove_topics':
-        const removeButtons = Object.keys(channelThreadMap).map(room => ([{
-          text: room,
-          callback_data: `confirm_remove_${room}`
-        }]));
-        
-        await bot.editMessageText('اختر الغرفة التي تريد حذفها:', {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: {
-            inline_keyboard: [
-              ...removeButtons,
-              [{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]
-            ]
-          }
-        });
-        break;
-
-      case 'list_topics':
-        const topicsList = Object.entries(channelThreadMap)
-          .map(([name, id]) => `🔸 ${name}\nالمعرف: ${id.split('_')[1]}`)
-          .join('\n\n');
-        
-        await bot.editMessageText(`قائمة الغرف الحالية:\n\n${topicsList}`, {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: {
-            inline_keyboard: [[{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]]
-          }
-        });
-        break;
-
-      case 'cancel_operation':
-        userStates.delete(userId);
-        await bot.editMessageText('تم إلغاء العملية ❌', {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: {
-            inline_keyboard: [[{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]]
-          }
-        });
-        break;
-
-      case 'back_to_menu':
-        await bot.editMessageText('الرجاء اختيار العملية المطلوبة:', {
-          chat_id: chatId,
-          message_id: messageId,
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'إضافة غرفة جديدة ➕', callback_data: 'add_topic' }],
-              [{ text: 'حذف غرفة ➖', callback_data: 'show_remove_topics' }],
-              [{ text: 'عرض جميع الغرف 📋', callback_data: 'list_topics' }]
-            ]
-          }
-        });
-        break;
-
-      default:
-        if (callbackQuery.data.startsWith('confirm_remove_')) {
-          const roomName = callbackQuery.data.replace('confirm_remove_', '');
-          await bot.editMessageText(
-            `هل أنت متأكد من حذف الغرفة "${roomName}"؟`,
-            {
-              chat_id: chatId,
-              message_id: messageId,
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    { text: 'نعم، احذف ✅', callback_data: `delete_${roomName}` },
-                    { text: 'لا، إلغاء ❌', callback_data: 'show_remove_topics' }
-                  ]
-                ]
-              }
-            }
-          );
-        } else if (callbackQuery.data.startsWith('delete_')) {
-          const roomName = callbackQuery.data.replace('delete_', '');
-          delete channelThreadMap[roomName];
-          updateConfigFile();
-          await bot.editMessageText(
-            `تم حذف الغرفة "${roomName}" بنجاح ✅`,
-            {
-              chat_id: chatId,
-              message_id: messageId,
-              reply_markup: {
-                inline_keyboard: [[{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]]
-              }
-            }
-          );
-        }
-        break;
-    }
-    
-    await bot.answerCallbackQuery(callbackQuery.id);
-  } catch (error) {
-    console.error('خطأ في معالجة العملية:', error);
-    await bot.editMessageText('حدث خطأ، يرجى المحاولة مرة أخرى ❌', {
-      chat_id: chatId,
-      message_id: messageId,
-      reply_markup: {
-        inline_keyboard: [[{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]]
-      }
-    });
-  }
-});
+// Rest of the bot code remains the same until the message handler...
 
 // Handle user messages for room creation
 bot.on('message', async (msg) => {
@@ -207,10 +74,10 @@ bot.on('message', async (msg) => {
         return;
       }
 
-      // Create a new topic in the channel
-      const topic = await bot.createForumTopic(chatId, roomName);
+      // Create topic using our custom function
+      const topic = await createForumTopic(chatId, roomName);
       
-      // Add new topic to channelThreadMap with just the message thread ID
+      // Add new topic to channelThreadMap
       channelThreadMap[roomName] = `${chatId}_${topic.message_thread_id}`;
 
       // Update the configuration file
