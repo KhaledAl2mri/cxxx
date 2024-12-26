@@ -17,7 +17,7 @@ const sentProducts = new Map();
 const userStates = new Map();
 
 // Admin chat ID
-const ADMIN_CHAT_ID = 893875350;
+const ADMIN_CHAT_ID = 871996732;
 
 // ... previous imports and setup code remains the same ...
 
@@ -46,6 +46,7 @@ bot.on('message', async (msg) => {
 
     const userId = msg.from.id;
     const chatId = msg.chat.id;
+    const chatGroupId = -1002179587442;
     const state = userStates.get(userId);
 
     if (chatId !== ADMIN_CHAT_ID) return;
@@ -64,7 +65,7 @@ bot.on('message', async (msg) => {
                 return;
             }
 
-            const chatInfo = await bot.getChat(chatId);
+            const chatInfo = await bot.getChat(chatGroupId);
             if (!chatInfo.is_forum) {
                 await bot.sendMessage(chatId, 'يجب أن تكون المجموعة منتدى لإنشاء المواضيع ❌');
                 return;
