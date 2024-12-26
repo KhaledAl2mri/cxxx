@@ -38,21 +38,24 @@ async function createForumTopic(chatId, name) {
   }
 }
 
-// Delete forum topic using raw API call
 async function deleteForumTopic(chatId, messageThreadId) {
-  try {
-    const response = await axios.post(`https://api.telegram.org/bot${token}/deleteForumTopic`, {
-      chat_id: chatId,
-      message_thread_id: messageThreadId
-    });
-    
-    if (!response.data.ok) {
-      throw new Error(response.data.description);
+    try {
+      const response = await axios.post(`https://api.telegram.org/bot${token}/deleteForumTopic`, {
+        chat_id: chatId,
+        message_thread_id: messageThreadId
+      });
+      
+      if (response.data.ok) {
+        return response.data.result;
+      } else {
+        throw new Error(response.data.description);
+      }
+    } catch (error) {
+      throw new Error(`Failed to create forum topic: ${error.message}`);
     }
-  } catch (error) {
-    throw new Error(`Failed to delete forum topic: ${error.message}`);
   }
-}
+
+
 
 // Utility function to update config file
 const updateConfigFile = () => {
@@ -192,7 +195,7 @@ bot.on('callback_query', async (callbackQuery) => {
           
           try {
             // Delete the topic from Telegram
-            await deleteForumTopic(chatId, threadId);
+            await deleteForumTopic(chatGroupId, threadId);
             
             // Remove from our mapping
             delete channelThreadMap[roomName];
