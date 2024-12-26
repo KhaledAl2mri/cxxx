@@ -17,7 +17,7 @@ const sentProducts = new Map();
 const userStates = new Map();
 
 // Admin chat ID
-const ADMIN_CHAT_ID = 871996732;
+const ADMIN_CHAT_ID = 893875350;
 const chatGroupId = -1002179587442;
 
 // Create topic using raw API call
@@ -39,19 +39,23 @@ async function createForumTopic(chatId, name) {
 }
 
 // Delete forum topic using raw API call
-async function deleteForumTopic(chatId, messageThreadId) {
-  try {
-    const response = await axios.post(`https://api.telegram.org/bot${token}/deleteForumTopic`, {
-      chat_id: chatId,
-      message_thread_id: messageThreadId
-    });
-    
-    if (!response.data.ok) {
-      throw new Error(response.data.description);
+async function deleteForumTopic(chatId, threadId) {
+    try {
+        const response = await axios.post(`https://api.telegram.org/bot${token}/deleteForumTopic`, {
+            chat_id: chatId,
+            message_thread_id: threadId
+        });
+
+        if (response.data.ok) {
+            console.log('تم حذف الموضوع بنجاح');
+            return response.data.result;
+        } else {
+            throw new Error(response.data.description);
+        }
+    } catch (error) {
+        console.error('خطأ في حذف الموضوع:', error.response?.data);
+        throw new Error(`فشل حذف موضوع المنتدى: ${error.response?.data?.description || error.message}`);
     }
-  } catch (error) {
-    throw new Error(`Failed to delete forum topic: ${error.message}`);
-  }
 }
 
 // Utility function to update config file
