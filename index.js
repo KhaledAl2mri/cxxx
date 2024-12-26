@@ -17,7 +17,8 @@ const sentProducts = new Map();
 const userStates = new Map();
 
 // Admin chat ID
-const ADMIN_CHAT_ID = 893875350;
+const ADMIN_CHAT_ID = 871996732;
+const chatGroupId = -1002179587442;
 
 // Create topic using raw API call
 async function createForumTopic(chatId, name) {
@@ -92,7 +93,6 @@ bot.on('callback_query', async (callbackQuery) => {
   const userId = callbackQuery.from.id;
   const chatId = callbackQuery.message.chat.id;
   const messageId = callbackQuery.message.message_id;
-  const chatGroupId = -1002179587442;
 
 
   try {
@@ -192,7 +192,7 @@ bot.on('callback_query', async (callbackQuery) => {
           
           try {
             // Delete the topic from Telegram
-            await deleteForumTopic(chatId, threadId);
+            await deleteForumTopic(chatGroupId, threadId);
             
             // Remove from our mapping
             delete channelThreadMap[roomName];
@@ -268,7 +268,7 @@ bot.on('message', async (msg) => {
       const topic = await createForumTopic(chatGroupId, roomName);
       
       // Add new topic to channelThreadMap
-      channelThreadMap[roomName] = `${chatId}_${topic.message_thread_id}`;
+      channelThreadMap[roomName] = `${chatGroupId}_${topic.message_thread_id}`;
 
       // Update the configuration file
       updateConfigFile();
