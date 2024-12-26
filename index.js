@@ -17,78 +17,25 @@ const sentProducts = new Map();
 const userStates = new Map();
 
 // Admin chat ID
-const ADMIN_CHAT_ID = 871996732;
+const ADMIN_CHAT_ID = 893875350;
 
-// ... previous imports and setup code remains the same ...
-
+// Create topic using raw API call
 async function createForumTopic(chatId, name) {
-    try {
-        const response = await axios.post(`https://api.telegram.org/bot${token}/createForumTopic`, {
-            chat_id: chatId,
-            name: name,
-            icon_color: 7322096  // Default blue color for the topic
-        });
-
-        if (response.data.ok) {
-            return response.data.result;
-        } else {
-            throw new Error(response.data.description);
-        }
-    } catch (error) {
-        console.error('Full error response:', error.response?.data);
-        throw new Error(`Failed to create forum topic: ${error.response?.data?.description || error.message}`);
+  try {
+    const response = await axios.post(`https://api.telegram.org/bot${token}/createForumTopic`, {
+      chat_id: chatId,
+      name: name
+    });
+    
+    if (response.data.ok) {
+      return response.data.result;
+    } else {
+      throw new Error(response.data.description);
     }
+  } catch (error) {
+    throw new Error(`Failed to create forum topic: ${error.message}`);
+  }
 }
-
-// Message handler
-bot.on('message', async (msg) => {
-    if (!msg.text || msg.text.startsWith('/')) return;
-
-    const userId = msg.from.id;
-    const chatId = msg.chat.id;
-    const chatGroupId = -1002179587442;
-    const state = userStates.get(userId);
-
-    if (chatId !== ADMIN_CHAT_ID) return;
-
-    if (state === 'waiting_for_room_name') {
-        const roomName = msg.text.trim();
-
-        try {
-            if (roomName.length < 2 || roomName.length > 30) {
-                await bot.sendMessage(chatId, 'اسم الغرفة يجب أن يكون بين 2 و 30 حرف ❌');
-                return;
-            }
-
-            if (channelThreadMap[roomName]) {
-                await bot.sendMessage(chatId, 'هذا الاسم موجود مسبقاً ❌');
-                return;
-            }
-
-            const chatInfo = await bot.getChat(chatGroupId);
-            if (!chatInfo.is_forum) {
-                await bot.sendMessage(chatId, 'يجب أن تكون المجموعة منتدى لإنشاء المواضيع ❌');
-                return;
-            }
-
-            const topic = await createForumTopic(chatInfo.id, roomName);
-            channelThreadMap[roomName] = `${chatInfo.id}_${topic.message_thread_id}`;
-
-            const successMessage = `تم إنشاء الغرفة بنجاح ✅\n\nاسم الغرفة: ${roomName}\nالمعرف: ${topic.message_thread_id}`;
-            await bot.sendMessage(chatId, successMessage);
-        } catch (error) {
-            console.error('خطأ في إنشاء الغرفة:', error);
-            const errorMessage = error.message.includes('not a forum') ?
-                'يجب أن تكون المجموعة منتدى لإنشاء المواضيع ❌' :
-                'حدث خطأ أثناء إنشاء الغرفة، يرجى المحاولة مرة أخرى ❌';
-
-            await bot.sendMessage(chatId, errorMessage);
-        }
-
-        userStates.delete(userId);
-    }
-});
-  
 
 // Delete forum topic using raw API call
 async function deleteForumTopic(chatId, messageThreadId) {
@@ -145,6 +92,8 @@ bot.on('callback_query', async (callbackQuery) => {
   const userId = callbackQuery.from.id;
   const chatId = callbackQuery.message.chat.id;
   const messageId = callbackQuery.message.message_id;
+  const chatGroupId = -1002179587442;
+
 
   try {
     switch (callbackQuery.data) {
@@ -316,7 +265,7 @@ bot.on('message', async (msg) => {
       }
 
       // Create topic using our custom function
-      const topic = await createForumTopic(chatId, roomName);
+      const topic = await createForumTopic(chatGroupId, roomName);
       
       // Add new topic to channelThreadMap
       channelThreadMap[roomName] = `${chatId}_${topic.message_thread_id}`;
@@ -339,7 +288,7 @@ bot.on('message', async (msg) => {
   }
 });
 
-// Function to send notifications
+
 async function sendNotifications() {
   try {
     const response = await axios.get(website);
