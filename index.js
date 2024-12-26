@@ -16,53 +16,168 @@ const sentProducts = new Map();
 // Store user states
 const userStates = new Map();
 
-bot.onText(/\/addtopic/, async (msg) => {
+// Admin chat ID
+const ADMIN_CHAT_ID = 893875350;
+
+// Utility function to update config file
+const updateConfigFile = () => {
+  const configPath = path.join(__dirname, 'channelConfig.js');
+  const configContent = `// channelConfig.js\n\nconst channelThreadMap = {\n${Object.entries(channelThreadMap)
+    .map(([name, id]) => `  '${name}': '${id}'`)
+    .join(',\n')}\n};\n\nmodule.exports = {\n  channelThreadMap\n};`;
+  fs.writeFileSync(configPath, configContent, 'utf8');
+};
+
+// Command to show topics management menu
+bot.onText(/\/topics/, async (msg) => {
   try {
     const chatId = msg.chat.id;
     
-    // Only process command if it's in a specific chat
-    if (chatId !== 893875350) {  // Replace with your bot admin chat ID
+    if (chatId !== ADMIN_CHAT_ID) {
       await bot.sendMessage(chatId, 'عذراً، هذا الأمر متاح فقط في غرفة الإدارة ❌');
       return;
     }
 
-    // Set user state to waiting for room name
-    userStates.set(msg.from.id, 'waiting_for_room_name');
-    
-    // Ask for room name with cancel button
-    await bot.sendMessage(chatId, 'الرجاء إدخال اسم الغرفة: \n ** انتباه : يجب عليك كتابة الاسم بالطريقة الصحيحة بدون اي مسافات ابدا وبنفس الصيغة يفضل نسخ الاسم **', {
+    await bot.sendMessage(chatId, 'الرجاء اختيار العملية المطلوبة:', {
       reply_markup: {
         inline_keyboard: [
-          [{ text: 'إلغاء ❌', callback_data: 'cancel_addtopic' }]
+          [{ text: 'إضافة غرفة جديدة ➕', callback_data: 'add_topic' }],
+          [{ text: 'حذف غرفة ➖', callback_data: 'show_remove_topics' }],
+          [{ text: 'عرض جميع الغرف 📋', callback_data: 'list_topics' }]
         ]
       }
     });
   } catch (error) {
-    console.error('خطأ في إضافة الموضوع:', error);
-    await bot.sendMessage(msg.chat.id, 'حدث خطأ أثناء إضافة الموضوع، يرجى المحاولة مرة أخرى ❌');
+    console.error('خطأ في عرض قائمة إدارة المواضيع:', error);
+    await bot.sendMessage(msg.chat.id, 'حدث خطأ، يرجى المحاولة مرة أخرى ❌');
   }
 });
 
-
-// Handle cancel button callback
+// Handle callback queries
 bot.on('callback_query', async (callbackQuery) => {
   const userId = callbackQuery.from.id;
   const chatId = callbackQuery.message.chat.id;
   const messageId = callbackQuery.message.message_id;
 
-  if (callbackQuery.data === 'cancel_addtopic') {
-    // Clear user state
-    userStates.delete(userId);
+  try {
+    switch (callbackQuery.data) {
+      case 'add_topic':
+        userStates.set(userId, 'waiting_for_room_name');
+        await bot.editMessageText(
+          'الرجاء إدخال اسم الغرفة الجديدة:', 
+          {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: {
+              inline_keyboard: [[{ text: 'إلغاء ❌', callback_data: 'cancel_operation' }]]
+            }
+          }
+        );
+        break;
+
+      case 'show_remove_topics':
+        const removeButtons = Object.keys(channelThreadMap).map(room => ([{
+          text: room,
+          callback_data: `confirm_remove_${room}`
+        }]));
+        
+        await bot.editMessageText('اختر الغرفة التي تريد حذفها:', {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: {
+            inline_keyboard: [
+              ...removeButtons,
+              [{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]
+            ]
+          }
+        });
+        break;
+
+      case 'list_topics':
+        const topicsList = Object.entries(channelThreadMap)
+          .map(([name, id]) => `🔸 ${name}\nالمعرف: ${id.split('_')[1]}`)
+          .join('\n\n');
+        
+        await bot.editMessageText(`قائمة الغرف الحالية:\n\n${topicsList}`, {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: {
+            inline_keyboard: [[{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]]
+          }
+        });
+        break;
+
+      case 'cancel_operation':
+        userStates.delete(userId);
+        await bot.editMessageText('تم إلغاء العملية ❌', {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: {
+            inline_keyboard: [[{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]]
+          }
+        });
+        break;
+
+      case 'back_to_menu':
+        await bot.editMessageText('الرجاء اختيار العملية المطلوبة:', {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'إضافة غرفة جديدة ➕', callback_data: 'add_topic' }],
+              [{ text: 'حذف غرفة ➖', callback_data: 'show_remove_topics' }],
+              [{ text: 'عرض جميع الغرف 📋', callback_data: 'list_topics' }]
+            ]
+          }
+        });
+        break;
+
+      default:
+        if (callbackQuery.data.startsWith('confirm_remove_')) {
+          const roomName = callbackQuery.data.replace('confirm_remove_', '');
+          await bot.editMessageText(
+            `هل أنت متأكد من حذف الغرفة "${roomName}"؟`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: 'نعم، احذف ✅', callback_data: `delete_${roomName}` },
+                    { text: 'لا، إلغاء ❌', callback_data: 'show_remove_topics' }
+                  ]
+                ]
+              }
+            }
+          );
+        } else if (callbackQuery.data.startsWith('delete_')) {
+          const roomName = callbackQuery.data.replace('delete_', '');
+          delete channelThreadMap[roomName];
+          updateConfigFile();
+          await bot.editMessageText(
+            `تم حذف الغرفة "${roomName}" بنجاح ✅`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [[{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]]
+              }
+            }
+          );
+        }
+        break;
+    }
     
-    // Edit the original message to show cancellation
-    await bot.editMessageText('تم إلغاء إضافة الغرفة ❌', {
+    await bot.answerCallbackQuery(callbackQuery.id);
+  } catch (error) {
+    console.error('خطأ في معالجة العملية:', error);
+    await bot.editMessageText('حدث خطأ، يرجى المحاولة مرة أخرى ❌', {
       chat_id: chatId,
       message_id: messageId,
-      reply_markup: { inline_keyboard: [] }
+      reply_markup: {
+        inline_keyboard: [[{ text: 'رجوع 🔙', callback_data: 'back_to_menu' }]]
+      }
     });
-    
-    // Answer the callback query
-    await bot.answerCallbackQuery(callbackQuery.id);
   }
 });
 
@@ -74,44 +189,37 @@ bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const state = userStates.get(userId);
 
-  // Only process messages if they're in the admin chat
-  if (chatId !== 893875350) return;  // Replace with your bot admin chat ID
+  if (chatId !== ADMIN_CHAT_ID) return;
 
   if (state === 'waiting_for_room_name') {
     const roomName = msg.text.trim();
 
-    // Validate room name
-    if (roomName.length < 2 || roomName.length > 30) {
-      await bot.sendMessage(chatId, 'عذراً، يجب أن يكون اسم الغرفة بين 2 و 30 حرف ❌');
-      userStates.delete(userId);
-      return;
-    }
-
-    // Check if room name already exists
-    if (channelThreadMap[roomName]) {
-      await bot.sendMessage(chatId, 'عذراً، هذا الاسم موجود مسبقاً ❌');
-      userStates.delete(userId);
-      return;
-    }
-
     try {
+      // Validate room name
+      if (roomName.length < 2 || roomName.length > 30) {
+        await bot.sendMessage(chatId, 'عذراً، يجب أن يكون اسم الغرفة بين 2 و 30 حرف ❌');
+        return;
+      }
+
+      // Check if room name already exists
+      if (channelThreadMap[roomName]) {
+        await bot.sendMessage(chatId, 'عذراً، هذا الاسم موجود مسبقاً ❌');
+        return;
+      }
+
       // Create a new topic in the channel
       const topic = await bot.createForumTopic(chatId, roomName);
       
-      // Add new topic to channelThreadMap
+      // Add new topic to channelThreadMap with just the message thread ID
       channelThreadMap[roomName] = `${chatId}_${topic.message_thread_id}`;
 
       // Update the configuration file
-      const configPath = path.join(__dirname, 'channelConfig.js');
-      const configContent = `// channelConfig.js\n\nconst channelThreadMap = ${JSON.stringify(channelThreadMap, null, 2)};\n\nmodule.exports = {\n  channelThreadMap\n};`;
-      
-      fs.writeFileSync(configPath, configContent, 'utf8');
+      updateConfigFile();
 
       // Send success message
-      const successMessage = `تم إنشاء الغرفة بنجاح ✅\n\nاسم الغرفة: ${roomName}\nمعرف الغرفة: ${topic.message_thread_id}`;
+      const successMessage = `تم إنشاء الغرفة بنجاح ✅\n\nاسم الغرفة: ${roomName}\nالمعرف: ${topic.message_thread_id}`;
       await bot.sendMessage(chatId, successMessage);
 
-      // Log the updated channelThreadMap
       console.log('تم تحديث قائمة الغرف:', channelThreadMap);
     } catch (error) {
       console.error('خطأ في إنشاء الغرفة:', error);
@@ -122,7 +230,6 @@ bot.on('message', async (msg) => {
     userStates.delete(userId);
   }
 });
-
 // Keep track of sent products
 
 // Function to send notifications
