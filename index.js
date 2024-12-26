@@ -192,12 +192,19 @@ bot.on('callback_query', async (callbackQuery) => {
           );
         } else if (callbackQuery.data.startsWith('delete_')) {
           const roomName = callbackQuery.data.replace('delete_', '');
-          const threadId = channelThreadMap[roomName].split('_')[1];
+          const threadId = channelThreadMap[roomName]?.split('_')[1]; // استخدام ? للتأكد من أن القيمة موجودة
+
           
+          if (!threadId) {
+            console.error(`id wrong: ${roomName} or ${threadId}`);
+            await bot.sendMessage(chatId, `لا يمكن حذف الموضوع، معرف الموضوع غير موجود.`);
+            return;
+        }
+
           try {
             // Delete the topic from Telegram
             await deleteForumTopic(chatGroupId, threadId);
-            
+
             // Remove from our mapping
             delete channelThreadMap[roomName];
             updateConfigFile();
