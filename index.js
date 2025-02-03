@@ -17,12 +17,11 @@ class ProductScraper {
     });
 
     worksheet.columns = [
-      { header: "الصورة", key: "image", width: 25 },
-      { header: "الباركود", key: "barcode", width: 30 },
-      { header: "اسم المنتج", key: "name", width: 40 },
-      { header: "السعر", key: "price", width: 15 },
-      { header: "الرابط", key: "url", width: 50 },
-    ];
+      { header: "Ø§Ù„ØµÙˆØ±Ø©", key: "image", width: 25 },
+      { header: "Ø§Ù„Ø¨Ø§Ø±ÙƒÙˆØ¯", key: "barcode", width: 30 },
+      { header: "Ø§Ø³Ù… Ø§Ù„Ù…Ù†ØªØ¬", key: "name", width: 40 },
+      { header: "Ø§Ù„Ø³Ø¹Ø±", key: "price", width: 15 },
+  ];
 
     const headerRow = worksheet.getRow(1);
     headerRow.font = { bold: true, size: 12, color: { argb: "FFFFFF" } };
@@ -112,7 +111,6 @@ class ProductScraper {
     const row = this.worksheet.addRow({
       name: product.name,
       price: product.price,
-      url: product.url,
     });
 
     const [productImage, barcodeImage] = await Promise.all([
@@ -183,9 +181,9 @@ class ProductScraper {
 
       console.log("\nGenerating final file...");
       await this.workbook.xlsx.writeFile("products_complete.xlsx");
-      console.log("✓ Scraping completed successfully");
+      console.log("âœ“ Scraping completed successfully");
     } catch (err) {
-      console.error("× Process failed:", err.message);
+      console.error("Ã— Process failed:", err.message);
     }
   }
 }
